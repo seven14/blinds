@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1512">
+<title>Poker Timer</title>
+<!-- Poker Blinds Timer. MIT License: free to use, copy, modify and share. See LICENSE. -->
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --panel: #ffffff;
+    --text: #1b1f1d;
+    --muted: #6b716d;
+    --accent: #1f7a4d;
+    --accent-text: #ffffff;
+    --warn: #c0392b;
+    --border: #d9d4c7;
+    --btn: #e8e3d8;
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1512;
+    --panel: #1a221e;
+    --text: #f1f4f2;
+    --muted: #8f9a94;
+    --accent: #2fb872;
+    --accent-text: #0b120e;
+    --warn: #ff5a4a;
+    --border: #2b3530;
+    --btn: #25302a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    user-select: none; -webkit-user-select: none;
+    overflow: hidden;
+    transition: background .2s, color .2s;
+  }
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px;
+  }
+  .level-label { font-size: clamp(16px, 4vw, 26px); font-weight: 700; color: var(--muted); letter-spacing: .05em; text-transform: uppercase; }
+  .icon-btn {
+    background: var(--btn); color: var(--text); border: none; border-radius: 12px;
+    width: 48px; height: 48px; font-size: 22px; cursor: pointer; margin-left: 8px;
+  }
+  main {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 0 16px; min-height: 0; text-align: center;
+  }
+  .timer {
+    font-variant-numeric: tabular-nums;
+    font-weight: 800;
+    line-height: 1;
+    font-size: min(30vw, 32vh);
+    letter-spacing: -0.02em;
+  }
+  .timer.warning { color: var(--warn); }
+  .timer.final { font-size: min(62vw, 42vh); }
+  .timer.paused { opacity: .45; }
+  .blinds-title { margin-top: 2vh; font-size: clamp(14px, 3.5vw, 22px); color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
+  .blinds {
+    font-variant-numeric: tabular-nums;
+    font-weight: 800; line-height: 1.05;
+    font-size: min(17vw, 16vh);
+    color: var(--accent);
+  }
+  .next { margin-top: 1vh; font-size: clamp(16px, 4.5vw, 28px); color: var(--muted); font-variant-numeric: tabular-nums; }
+  #awakeBtn { position: relative; opacity: .45; }
+  #awakeBtn.on { opacity: 1; box-shadow: inset 0 0 0 2px var(--accent); }
+  #awakeBtn.off::after {
+    content: ""; position: absolute; left: 10px; right: 10px; top: 50%; height: 3px;
+    background: var(--warn); transform: rotate(-35deg); border-radius: 2px;
+  }
+  .toast {
+    position: fixed; left: 50%; bottom: calc(100px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 12px 20px; border-radius: 999px;
+    font-size: 17px; font-weight: 700; white-space: nowrap; z-index: 30;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+  }
+  .toast.show { opacity: .92; }
+  footer {
+    display: flex; gap: 8px; padding: 12px 16px 16px;
+  }
+  footer button {
+    flex: 1; border: none; border-radius: 16px; height: 68px; padding: 0 4px;
+    font-size: clamp(13px, 3.6vw, 20px); font-weight: 700; cursor: pointer;
+    background: var(--btn); color: var(--text);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1;
+  }
+  footer button .ic { font-size: 1.4em; }
+  footer button.primary { flex: 1.6; font-size: clamp(18px, 5vw, 24px); background: var(--accent); color: var(--accent-text); }
+  footer button:active, .icon-btn:active { transform: scale(.97); }
+
+  /* Expired overlay */
+  .overlay {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.6); z-index: 20; padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .card {
+    background: var(--panel); color: var(--text); border-radius: 20px; width: 100%; max-width: 480px;
+    padding: 24px; max-height: 90vh; overflow-y: auto;
+  }
+  .alarm-card { text-align: center; }
+  .alarm-card h2 { margin: 0 0 8px; font-size: 28px; }
+  .alarm-card .new-blinds { font-size: 56px; font-weight: 800; color: var(--accent); margin: 12px 0 20px; font-variant-numeric: tabular-nums; }
+  .alarm-card button { width: 100%; height: 72px; font-size: 22px; font-weight: 800; border: none; border-radius: 16px; background: var(--accent); color: var(--accent-text); cursor: pointer; }
+  .flash { animation: flash 1s infinite; }
+  @keyframes flash { 50% { background: rgba(192,57,43,.75); } }
+
+  /* Settings */
+  .card h2 { margin: 0 0 16px; font-size: 24px; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-weight: 700; margin-bottom: 6px; }
+  .field .hint { font-size: 14px; color: var(--muted); margin-top: 6px; }
+  .field input[type=number] {
+    width: 100%; height: 52px; font-size: 22px; padding: 0 12px; border-radius: 12px;
+    border: 2px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  .row { display: flex; gap: 12px; }
+  .row .field { flex: 1; }
+  .check { display: flex; align-items: center; gap: 12px; font-weight: 700; cursor: pointer; }
+  .check input { width: 28px; height: 28px; accent-color: var(--accent); }
+  .preview { font-size: 15px; color: var(--muted); line-height: 1.5; font-variant-numeric: tabular-nums; }
+  .sound-row { display: flex; gap: 10px; }
+  .sound-row select {
+    flex: 1; min-width: 0; height: 52px; font-size: 20px; padding: 0 12px; border-radius: 12px;
+    border: 2px solid var(--border); background: var(--bg); color: var(--text);
+  }
+  .sound-row button {
+    flex: 0 0 64px; width: 64px; height: 52px; border: none; border-radius: 12px; font-size: 22px; cursor: pointer;
+    background: var(--accent); color: var(--accent-text);
+  }
+  .card-actions { display: flex; gap: 10px; margin-top: 8px; }
+  .card-actions button { flex: 1; height: 56px; border: none; border-radius: 14px; font-size: 18px; font-weight: 700; cursor: pointer; background: var(--btn); color: var(--text); }
+  .card-actions button.primary { background: var(--accent); color: var(--accent-text); }
+
+  /* Landscape: side-by-side */
+  @media (orientation: landscape) and (max-height: 600px) {
+    main { flex-direction: row; gap: 5vw; }
+    .timer { font-size: min(22vw, 42vh); }
+    .timer.final { font-size: min(36vw, 62vh); }
+    .blinds { font-size: min(12vw, 24vh); }
+    .blinds-wrap { text-align: left; }
+    footer button { height: 56px; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="level-label" id="levelLabel">Level 1</div>
+    <div>
+      <button class="icon-btn" id="awakeBtn" aria-label="Keep screen awake" aria-pressed="false">💡</button>
+      <button class="icon-btn" id="themeBtn" aria-label="Toggle light/dark mode">🌙</button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">⚙️</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="timer paused" id="timer">15:00</div>
+    <div class="blinds-wrap">
+      <div class="blinds-title">Blinds</div>
+      <div class="blinds" id="blinds">1 / 2</div>
+      <div class="next" id="next">Next: 2 / 4</div>
+    </div>
+  </main>
+
+  <footer>
+    <button id="backBtn" aria-label="Previous level"><span class="ic">⏮</span>Back</button>
+    <button id="restartBtn" aria-label="Restart this level"><span class="ic">↺</span>Restart</button>
+    <button id="startBtn" class="primary">Start</button>
+    <button id="skipBtn" aria-label="Next level"><span class="ic">⏭</span>Skip</button>
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- Level-over alarm -->
+  <div class="overlay flash" id="alarmOverlay">
+    <div class="card alarm-card">
+      <h2>Time's up!</h2>
+      <div id="alarmLevel">Level 2</div>
+      <div class="new-blinds" id="alarmBlinds">2 / 4</div>
+      <button id="nextLevelBtn">OK</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="overlay" id="settingsOverlay">
+    <div class="card">
+      <h2>Settings</h2>
+      <div class="field">
+        <label for="minutes">Minutes per level</label>
+        <input type="number" id="minutes" min="1" max="180" inputmode="numeric">
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="small">Little blind</label>
+          <input type="number" id="small" min="1" inputmode="numeric">
+        </div>
+        <div class="field">
+          <label>Big blind</label>
+          <input type="number" id="big" disabled>
+        </div>
+      </div>
+      <div class="field">
+        <label class="check"><input type="checkbox" id="clean"> Clean blind escalation</label>
+        <div class="hint">Steps ×1, ×2, ×5, ×10, then doubles (1/2 → 2/4 → 5/10 → 10/20…). Off: the little blind simply doubles each level.</div>
+      </div>
+      <div class="field">
+        <label for="alarmSound">Alarm sound</label>
+        <div class="sound-row">
+          <select id="alarmSound">
+            <option value="classic">Classic beep</option>
+            <option value="bell">Bell / chime</option>
+            <option value="siren">Siren</option>
+            <option value="casino">Casino ding</option>
+            <option value="buzzer">Buzzer</option>
+            <option value="country">Country twang (“Blinds Up”)</option>
+            <option value="lounge">Vegas lounge (“High Roller”)</option>
+            <option value="cow">Cow moo</option>
+          </select>
+          <button type="button" id="previewSound" aria-label="Preview alarm sound">▶</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Preview</label>
+        <div class="preview" id="preview"></div>
+      </div>
+      <div class="card-actions">
+        <button id="cancelSettings">Cancel</button>
+        <button id="saveSettings" class="primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+
+  // ---------- Persistent settings ----------
+  const defaults = { minutes: 15, small: 1, clean: true, theme: null, alarmSound: 'classic', keepAwake: true };
+  function load() {
+    try { return Object.assign({}, defaults, JSON.parse(localStorage.getItem('pokerTimer') || '{}')); }
+    catch (e) { return Object.assign({}, defaults); }
+  }
+  function save() {
+    try { localStorage.setItem('pokerTimer', JSON.stringify(settings)); } catch (e) {}
+  }
+  const settings = load();
+
+  // ---------- Theme ----------
+  function applyTheme() {
+    const theme = settings.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.dataset.theme = theme;
+    $('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
+    document.querySelector('meta[name=theme-color]').content = theme === 'dark' ? '#0f1512' : '#f4f1ea';
+  }
+  $('themeBtn').onclick = () => {
+    settings.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    save(); applyTheme();
+  };
+  applyTheme();
+
+  // ---------- Blind math ----------
+  function multiplier(level, clean) {
+    if (!clean) return Math.pow(2, level);
+    const ladder = [1, 2, 5, 10];
+    return level < ladder.length ? ladder[level] : 10 * Math.pow(2, level - 3);
+  }
+  function blindsFor(level, small = settings.small, clean = settings.clean) {
+    const s = small * multiplier(level, clean);
+    return [s, s * 2];
+  }
+  const fmt = n => n.toLocaleString();
+  const fmtBlinds = l => { const [s, b] = blindsFor(l); return `${fmt(s)} / ${fmt(b)}`; };
+
+  // ---------- Timer state ----------
+  let level = 0;
+  let remaining = settings.minutes * 60 * 1000; // ms
+  let endTime = null;   // set while running
+  let warned = false;
+  let tickHandle = null;
+
+  const running = () => endTime !== null;
+
+  function render() {
+    const ms = running() ? Math.max(0, endTime - Date.now()) : remaining;
+    const total = Math.ceil(ms / 1000);
+    const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+    const finalMinute = total <= 60;
+    $('timer').textContent = finalMinute ? String(total)
+                           : h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+                               : `${m}:${String(s).padStart(2,'0')}`;
+    $('timer').classList.toggle('final', finalMinute);
+    $('timer').classList.toggle('warning', total <= 60 && total > 0 && settings.minutes > 1);
+    $('timer').classList.toggle('paused', !running());
+    $('levelLabel').textContent = `Level ${level + 1}`;
+    $('blinds').textContent = fmtBlinds(level);
+    $('next').textContent = `Next: ${fmtBlinds(level + 1)}`;
+    $('startBtn').textContent = running() ? 'Pause' : (remaining < settings.minutes * 60000 ? 'Resume' : 'Start');
+    $('backBtn').disabled = level === 0;
+    $('backBtn').style.opacity = level === 0 ? .4 : 1;
+  }
+
+  function tick() {
+    if (!running()) return;
+    const left = endTime - Date.now();
+    if (!warned && left <= 60000 && settings.minutes > 1) { warned = true; warningBeep(); }
+    if (left <= 0) { expire(); return; }
+    render();
+  }
+
+  function start() {
+    unlockAudio();
+    endTime = Date.now() + remaining;
+    clearInterval(tickHandle);
+    tickHandle = setInterval(tick, 200);
+    requestWakeLock();
+    render();
+  }
+  function pause() {
+    remaining = Math.max(0, endTime - Date.now());
+    endTime = null;
+    clearInterval(tickHandle);
+    render();
+  }
+  function resetLevelClock() {
+    endTime = null; clearInterval(tickHandle);
+    remaining = settings.minutes * 60000;
+    warned = false;
+  }
+  function expire() {
+    resetLevelClock();
+    level++;
+    render();
+    $('alarmLevel').textContent = `Level ${level + 1}`;
+    $('alarmBlinds').textContent = fmtBlinds(level);
+    $('alarmOverlay').classList.add('show');
+    startAlarm();
+  }
+
+  $('startBtn').onclick = () => running() ? pause() : start();
+  $('restartBtn').onclick = () => { resetLevelClock(); render(); };
+  $('skipBtn').onclick = () => { resetLevelClock(); level++; render(); };
+  $('backBtn').onclick = () => { if (level > 0) { resetLevelClock(); level--; render(); } };
+  $('nextLevelBtn').onclick = () => {
+    stopAlarm();
+    $('alarmOverlay').classList.remove('show');
+    render();
+  };
+
+  // ---------- Audio ----------
+  let ctx = null;
+  function unlockAudio() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) ctx = new AC();
+    }
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    // Play a silent blip so iOS fully unlocks audio on this user gesture
+    if (ctx) tone(0, 0.05, 440, 0.0001);
+  }
+  function tone(when, dur, freq, vol = 0.5, type = 'square') {
+    if (!ctx) return;
+    const t = ctx.currentTime + when;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.01);
+    g.gain.setValueAtTime(vol, t + dur - 0.02);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function vibrate(p) { if (navigator.vibrate) try { navigator.vibrate(p); } catch (e) {} }
+
+  function warningBeep() {
+    tone(0, 0.15, 880, 0.35, 'sine');
+    tone(0.25, 0.15, 880, 0.35, 'sine');
+    vibrate([150, 100, 150]);
+  }
+
+  let alarmHandle = null, alarmStopAt = 0;
+
+  // Generic voice: oscillator with optional pitch sweep and a percussive or held envelope
+  function voice({ at = 0, dur, freq, freqEnd = null, type = 'sine', vol = 0.4, decay = false }) {
+    if (!ctx) return;
+    const t = ctx.currentTime + at;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (freqEnd) o.frequency.linearRampToValueAtTime(freqEnd, t + dur);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.005);
+    if (decay) {
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    } else {
+      g.gain.setValueAtTime(vol, t + dur - 0.03);
+      g.gain.linearRampToValueAtTime(0, t + dur);
+    }
+    o.connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  // Each sound plays one ~1.5 s burst; the alarm repeats it every 1.8 s
+  const sounds = {
+    classic() {
+      for (let i = 0; i < 4; i++) {
+        tone(i * 0.25, 0.18, 1047, 0.5);
+        tone(i * 0.25 + 0.09, 0.09, 1319, 0.4);
+      }
+    },
+    bell() {
+      // Two strikes; inharmonic partials give a bell-like ring
+      [0, 0.8].forEach(at => {
+        [[1, 0.45], [2.76, 0.2], [5.4, 0.12], [8.93, 0.06]].forEach(([mult, v]) =>
+          voice({ at, dur: 1.6, freq: 660 * mult, vol: v, decay: true }));
+      });
+    },
+    siren() {
+      voice({ at: 0,   dur: 0.8, freq: 600,  freqEnd: 1300, type: 'sawtooth', vol: 0.3 });
+      voice({ at: 0.8, dur: 0.8, freq: 1300, freqEnd: 600,  type: 'sawtooth', vol: 0.3 });
+    },
+    casino() {
+      const notes = [1319, 1568, 2093, 2637];
+      for (let r = 0; r < 2; r++) {
+        notes.forEach((f, i) => {
+          const at = r * 0.7 + i * 0.1;
+          voice({ at, dur: 0.45, freq: f, type: 'triangle', vol: 0.4, decay: true });
+          voice({ at, dur: 0.3, freq: f * 2, type: 'sine', vol: 0.12, decay: true });
+        });
+      }
+    },
+    buzzer() {
+      [0, 0.8].forEach(at => {
+        voice({ at, dur: 0.65, freq: 110, type: 'sawtooth', vol: 0.35 });
+        voice({ at, dur: 0.65, freq: 117, type: 'square', vol: 0.2 });
+      });
+    },
+    country() {
+      // Original "Blinds Up" jingle in G: banjo-style plucks over a boom-chick bass
+      const N = { G2: 98, D2: 73.42, C3: 130.81, G3: 196, B3: 246.94, D4: 293.66,
+                  E4: 329.63, G4: 392, A4: 440, B4: 493.88, D5: 587.33, E5: 659.25, G5: 783.99 };
+      const e = 0.15; // eighth note
+      const melody = [
+        ['D5',0,1,true], ['E5',1,1], ['G5',2,1], ['E5',3,1], ['D5',4,2],
+        ['B4',6,1], ['D5',7,1], ['E5',8,1,true], ['D5',9,1], ['B4',10,1], ['A4',11,1],
+        ['G4',12,4,true]
+      ];
+      melody.forEach(([n, beat, len, slide]) =>
+        pluck({ at: beat * e, dur: len * e + 0.25, freq: N[n], vol: 0.32, slide }));
+      // Boom-chick: bass note, then a quick strum
+      const bass = [['G2',0], ['D2',2], ['G2',4], ['D2',6], ['C3',8], ['D2',10], ['G2',12]];
+      bass.forEach(([n, beat]) => voice({ at: beat * e, dur: 0.28, freq: N[n], type: 'triangle', vol: 0.4, decay: true }));
+      [1, 3, 5, 7, 9, 11].forEach(beat =>
+        ['G3','B3','D4'].forEach((n, i) => pluck({ at: beat * e + i * 0.012, dur: 0.12, freq: N[n], vol: 0.08 })));
+    },
+    lounge() {
+      // Original "High Roller" lounge jingle: swung electric piano over walking bass and brushed hi-hat
+      const q = 0.36;                 // quarter note
+      const b = x => x * q;           // beat -> seconds (swung eighths written as .67)
+      const chords = [
+        [0,   1.4, [261.63, 329.63, 392.00, 493.88]], // Cmaj7
+        [1.67,0.3, [261.63, 329.63, 392.00, 493.88]],
+        [2,   1.4, [196.00, 277.18, 329.63, 392.00]], // A7
+        [3.67,0.3, [196.00, 277.18, 329.63, 392.00]],
+        [4,   1.4, [174.61, 220.00, 261.63, 329.63]], // Dm9
+        [5.67,0.3, [174.61, 220.00, 261.63, 329.63]],
+        [6,   0.7, [174.61, 246.94, 329.63]],         // G13
+        [7,   1.6, [164.81, 246.94, 293.66, 392.00]]  // Cmaj9 (final)
+      ];
+      chords.forEach(([at, dur, notes]) =>
+        notes.forEach(f => epiano({ at: b(at), dur, freq: f, vol: 0.07 })));
+      const melody = [
+        [0, .3, 659.25], [.67, .2, 783.99], [1, .6, 987.77],
+        [2, .2, 880.00], [2.67, .2, 783.99], [3, .6, 659.25],
+        [4, .2, 698.46], [4.67, .2, 659.25], [5, .7, 587.33],
+        [6, .2, 493.88], [6.67, .2, 587.33], [7, 1.4, 659.25]
+      ];
+      melody.forEach(([at, dur, f]) => epiano({ at: b(at), dur: dur + 0.25, freq: f, vol: 0.2, bright: true }));
+      const bass = [130.81, 164.81, 110.00, 138.59, 146.83, 174.61, 98.00, 130.81];
+      bass.forEach((f, i) => {
+        voice({ at: b(i), dur: i === 7 ? 1.2 : q * 0.95, freq: f, type: 'sine', vol: 0.35, decay: true });
+        voice({ at: b(i), dur: q * 0.6, freq: f * 2, type: 'triangle', vol: 0.08, decay: true });
+      });
+      [1, 1.67, 3, 3.67, 5, 5.67].forEach(at => hat(b(at), at % 1 ? 0.04 : 0.07));
+    },
+    cow() {
+      // One long "mooooo": a buzzy low voice whose pitch rises then sags,
+      // shaped by a filter that opens from a closed-mouth "mm" to an open "ooo"
+      if (!ctx) return;
+      const t = ctx.currentTime, len = 1.8;
+      const out = ctx.createGain();
+      out.gain.setValueAtTime(0, t);
+      out.gain.linearRampToValueAtTime(0.55, t + 0.18);
+      out.gain.setValueAtTime(0.55, t + len - 0.45);
+      out.gain.linearRampToValueAtTime(0, t + len);
+
+      const mouth = ctx.createBiquadFilter();           // "mm" -> "ooo" -> trailing off
+      mouth.type = 'lowpass'; mouth.Q.value = 6;
+      mouth.frequency.setValueAtTime(300, t);
+      mouth.frequency.linearRampToValueAtTime(1100, t + 0.35);
+      mouth.frequency.linearRampToValueAtTime(800, t + 1.2);
+      mouth.frequency.linearRampToValueAtTime(450, t + len);
+      const chest = ctx.createBiquadFilter();           // vocal resonance
+      chest.type = 'peaking'; chest.frequency.value = 650; chest.Q.value = 2.5; chest.gain.value = 9;
+      mouth.connect(chest).connect(out).connect(ctx.destination);
+
+      const lfo = ctx.createOscillator(), lfoAmt = ctx.createGain(); // wobbly vibrato
+      lfo.frequency.value = 5.5; lfoAmt.gain.value = 3;
+      lfo.connect(lfoAmt);
+      [['sawtooth', 1, 0.5], ['square', 1.012, 0.15]].forEach(([type, detune, v]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = type;
+        o.frequency.setValueAtTime(95 * detune, t);
+        o.frequency.linearRampToValueAtTime(135 * detune, t + 0.25);
+        o.frequency.linearRampToValueAtTime(122 * detune, t + 1.0);
+        o.frequency.linearRampToValueAtTime(82 * detune, t + len);
+        lfoAmt.connect(o.frequency);
+        g.gain.value = v;
+        o.connect(g).connect(mouth);
+        o.start(t); o.stop(t + len + 0.05);
+      });
+      lfo.start(t); lfo.stop(t + len + 0.05);
+
+      // A little breathy air on top
+      if (!noiseBuf) hat(0, 0.00001); // makes sure the noise buffer exists
+      const n = ctx.createBufferSource(), nf = ctx.createBiquadFilter(), ng = ctx.createGain();
+      n.buffer = noiseBuf; n.loop = true;
+      nf.type = 'bandpass'; nf.frequency.value = 1200; nf.Q.value = 1;
+      ng.gain.value = 0.05;
+      n.connect(nf).connect(ng).connect(out);
+      n.start(t); n.stop(t + len);
+    }
+  };
+  const soundLength = { country: 2.6, lounge: 3.4, cow: 2.3 }; // seconds; others default to 1.5
+
+  // Electric-piano tone: soft sine body, slight detune for shimmer, short bell-like "tine" on the attack
+  function epiano({ at = 0, dur, freq, vol = 0.1, bright = false }) {
+    voice({ at, dur, freq, vol, decay: true });
+    voice({ at, dur, freq: freq * 1.003, vol: vol * 0.5, decay: true });
+    voice({ at, dur: Math.min(dur, 0.25), freq: freq * (bright ? 4 : 3), vol: vol * 0.25, decay: true });
+  }
+
+  // Brushed hi-hat: a short burst of filtered noise
+  let noiseBuf = null;
+  function hat(at, vol) {
+    if (!ctx) return;
+    if (!noiseBuf) {
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 0.2, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    const t = ctx.currentTime + at;
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = noiseBuf;
+    f.type = 'highpass'; f.frequency.value = 7000;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    s.connect(f).connect(g).connect(ctx.destination);
+    s.start(t); s.stop(t + 0.15);
+  }
+
+  // Bright, twangy pluck: sawtooth through a closing low-pass filter, optional slide into the note
+  function pluck({ at = 0, dur, freq, vol = 0.3, slide = false }) {
+    if (!ctx) return;
+    const t = ctx.currentTime + at;
+    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth';
+    if (slide) {
+      o.frequency.setValueAtTime(freq * 0.89, t);
+      o.frequency.exponentialRampToValueAtTime(freq, t + 0.06);
+    } else {
+      o.frequency.setValueAtTime(freq, t);
+    }
+    f.type = 'lowpass'; f.Q.value = 4;
+    f.frequency.setValueAtTime(4000, t);
+    f.frequency.exponentialRampToValueAtTime(700, t + dur);
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g).connect(ctx.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function playSound(name) { (sounds[name] || sounds.classic)(); }
+
+  function alarmBurst() {
+    playSound(settings.alarmSound);
+    vibrate([400, 150, 400, 150, 400]);
+  }
+  function startAlarm() {
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    alarmStopAt = Date.now() + 20000; // ring up to 20 s, or until tapped
+    alarmBurst();
+    clearInterval(alarmHandle);
+    const gap = ((soundLength[settings.alarmSound] || 1.5) + 0.3) * 1000;
+    alarmHandle = setInterval(() => {
+      if (Date.now() > alarmStopAt) { clearInterval(alarmHandle); return; }
+      alarmBurst();
+    }, gap);
+  }
+  function stopAlarm() { clearInterval(alarmHandle); vibrate(0); }
+
+  // ---------- Keep screen awake ----------
+  // Uses the standard Screen Wake Lock API where available. If the browser lacks it or refuses
+  // (older iPhones, opening the file directly, some in-app browsers), falls back to a tiny
+  // silent, invisible looping video, which phones treat as "media playing" and won't sleep.
+  // Video data from NoSleep.js v0.12.0 by Rich Tibbett, MIT license.
+  const NOSLEEP_WEBM = "data:video/webm;base64,GkXfowEAAAAAAAAfQoaBAUL3gQFC8oEEQvOBCEKChHdlYm1Ch4EEQoWBAhhTgGcBAAAAAAAVkhFNm3RALE27i1OrhBVJqWZTrIHfTbuMU6uEFlSua1OsggEwTbuMU6uEHFO7a1OsghV17AEAAAAAAACkAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmAQAAAAAAAEUq17GDD0JATYCNTGF2ZjU1LjMzLjEwMFdBjUxhdmY1NS4zMy4xMDBzpJBlrrXf3DCDVB8KcgbMpcr+RImIQJBgAAAAAAAWVK5rAQAAAAAAD++uAQAAAAAAADLXgQFzxYEBnIEAIrWcg3VuZIaFVl9WUDiDgQEj44OEAmJaAOABAAAAAAAABrCBsLqBkK4BAAAAAAAPq9eBAnPFgQKcgQAitZyDdW5khohBX1ZPUkJJU4OBAuEBAAAAAAAAEZ+BArWIQOdwAAAAAABiZIEgY6JPbwIeVgF2b3JiaXMAAAAAAoC7AAAAAAAAgLUBAAAAAAC4AQN2b3JiaXMtAAAAWGlwaC5PcmcgbGliVm9yYmlzIEkgMjAxMDExMDEgKFNjaGF1ZmVudWdnZXQpAQAAABUAAABlbmNvZGVyPUxhdmM1NS41Mi4xMDIBBXZvcmJpcyVCQ1YBAEAAACRzGCpGpXMWhBAaQlAZ4xxCzmvsGUJMEYIcMkxbyyVzkCGkoEKIWyiB0JBVAABAAACHQXgUhIpBCCGEJT1YkoMnPQghhIg5eBSEaUEIIYQQQgghhBBCCCGERTlokoMnQQgdhOMwOAyD5Tj4HIRFOVgQgydB6CCED0K4moOsOQghhCQ1SFCDBjnoHITCLCiKgsQwuBaEBDUojILkMMjUgwtCiJqDSTX4GoRnQXgWhGlBCCGEJEFIkIMGQcgYhEZBWJKDBjm4FITLQagahCo5CB+EIDRkFQCQAACgoiiKoigKEBqyCgDIAAAQQFEUx3EcyZEcybEcCwgNWQUAAAEACAAAoEiKpEiO5EiSJFmSJVmSJVmS5omqLMuyLMuyLMsyEBqyCgBIAABQUQxFcRQHCA1ZBQBkAAAIoDiKpViKpWiK54iOCISGrAIAgAAABAAAEDRDUzxHlETPVFXXtm3btm3btm3btm3btm1blmUZCA1ZBQBAAAAQ0mlmqQaIMAMZBkJDVgEACAAAgBGKMMSA0JBVAABAAACAGEoOogmtOd+c46BZDppKsTkdnEi1eZKbirk555xzzsnmnDHOOeecopxZDJoJrTnnnMSgWQqaCa0555wnsXnQmiqtOeeccc7pYJwRxjnnnCateZCajbU555wFrWmOmkuxOeecSLl5UptLtTnnnHPOOeecc84555zqxekcnBPOOeecqL25lpvQxTnnnE/G6d6cEM4555xzzjnnnHPOOeecIDRkFQAABABAEIaNYdwpCNLnaCBGEWIaMulB9+gwCRqDnELq0ehopJQ6CCWVcVJKJwgNWQUAAAIAQAghhRRSSCGFFFJIIYUUYoghhhhyyimnoIJKKqmooowyyyyzzDLLLLPMOuyssw47DDHEEEMrrcRSU2011lhr7jnnmoO0VlprrbVSSimllFIKQkNWAQAgAAAEQgYZZJBRSCGFFGKIKaeccgoqqIDQkFUAACAAgAAAAABP8hzRER3RER3RER3RER3R8RzPESVREiVREi3TMjXTU0VVdWXXlnVZt31b2IVd933d933d+HVhWJZlWZZlWZZlWZZlWZZlWZYgNGQVAAACAAAghBBCSCGFFFJIKcYYc8w56CSUEAgNWQUAAAIACAAAAHAUR3EcyZEcSbIkS9IkzdIsT/M0TxM9URRF0zRV0RVdUTdtUTZl0zVdUzZdVVZtV5ZtW7Z125dl2/d93/d93/d93/d93/d9XQdCQ1YBABIAADqSIymSIimS4ziOJElAaMgqAEAGAEAAAIriKI7jOJIkSZIlaZJneZaomZrpmZ4qqkBoyCoAABAAQAAAAAAAAIqmeIqpeIqoeI7oiJJomZaoqZoryqbsuq7ruq7ruq7ruq7ruq7ruq7ruq7ruq7ruq7ruq7ruq7ruq4LhIasAgAkAAB0JEdyJEdSJEVSJEdygNCQVQCADACAAAAcwzEkRXIsy9I0T/M0TxM90RM901NFV3SB0JBVAAAgAIAAAAAAAAAMybAUy9EcTRIl1VItVVMt1VJF1VNVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVN0zRNEwgNWQkAkAEAkBBTLS3GmgmLJGLSaqugYwxS7KWxSCpntbfKMYUYtV4ah5RREHupJGOKQcwtpNApJq3WVEKFFKSYYyoVUg5SIDRkhQAQmgHgcBxAsixAsiwAAAAAAAAAkDQN0DwPsDQPAAAAAAAAACRNAyxPAzTPAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABA0jRA8zxA8zwAAAAAAAAA0DwP8DwR8EQRAAAAAAAAACzPAzTRAzxRBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABA0jRA8zxA8zwAAAAAAAAAsDwP8EQR0DwRAAAAAAAAACzPAzxRBDzRAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAEOAAABBgIRQasiIAiBMAcEgSJAmSBM0DSJYFTYOmwTQBkmVB06BpME0AAAAAAAAAAAAAJE2DpkHTIIoASdOgadA0iCIAAAAAAAAAAAAAkqZB06BpEEWApGnQNGgaRBEAAAAAAAAAAAAAzzQhihBFmCbAM02IIkQRpgkAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAGHAAAAgwoQwUGrIiAIgTAHA4imUBAIDjOJYFAACO41gWAABYliWKAABgWZooAgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAYcAAACDChDBQashIAiAIAcCiKZQHHsSzgOJYFJMmyAJYF0DyApgFEEQAIAAAocAAACLBBU2JxgEJDVgIAUQAABsWxLE0TRZKkaZoniiRJ0zxPFGma53meacLzPM80IYqiaJoQRVE0TZimaaoqME1VFQAAUOAAABBgg6bE4gCFhqwEAEICAByKYlma5nmeJ4qmqZokSdM8TxRF0TRNU1VJkqZ5niiKommapqqyLE3zPFEURdNUVVWFpnmeKIqiaaqq6sLzPE8URdE0VdV14XmeJ4qiaJqq6roQRVE0TdNUTVV1XSCKpmmaqqqqrgtETxRNU1Vd13WB54miaaqqq7ouEE3TVFVVdV1ZBpimaaqq68oyQFVV1XVdV5YBqqqqruu6sgxQVdd1XVmWZQCu67qyLMsCAAAOHAAAAoygk4wqi7DRhAsPQKEhKwKAKAAAwBimFFPKMCYhpBAaxiSEFEImJaXSUqogpFJSKRWEVEoqJaOUUmopVRBSKamUCkIqJZVSAADYgQMA2IGFUGjISgAgDwCAMEYpxhhzTiKkFGPOOScRUoox55yTSjHmnHPOSSkZc8w556SUzjnnnHNSSuacc845KaVzzjnnnJRSSuecc05KKSWEzkEnpZTSOeecEwAAVOAAABBgo8jmBCNBhYasBABSAQAMjmNZmuZ5omialiRpmud5niiapiZJmuZ5nieKqsnzPE8URdE0VZXneZ4oiqJpqirXFUXTNE1VVV2yLIqmaZqq6rowTdNUVdd1XZimaaqq67oubFtVVdV1ZRm2raqq6rqyDFzXdWXZloEsu67s2rIAAPAEBwCgAhtWRzgpGgssNGQlAJABAEAYg5BCCCFlEEIKIYSUUggJAAAYcAAACDChDBQashIASAUAAIyx1lprrbXWQGettdZaa62AzFprrbXWWmuttdZaa6211lJrrbXWWmuttdZaa6211lprrbXWWmuttdZaa6211lprrbXWWmuttdZaa6211lprrbXWWmstpZRSSimllFJKKaWUUkoppZRSSgUA+lU4APg/2LA6wknRWGChISsBgHAAAMAYpRhzDEIppVQIMeacdFRai7FCiDHnJKTUWmzFc85BKCGV1mIsnnMOQikpxVZjUSmEUlJKLbZYi0qho5JSSq3VWIwxqaTWWoutxmKMSSm01FqLMRYjbE2ptdhqq7EYY2sqLbQYY4zFCF9kbC2m2moNxggjWywt1VprMMYY3VuLpbaaizE++NpSLDHWXAAAd4MDAESCjTOsJJ0VjgYXGrISAAgJACAQUooxxhhzzjnnpFKMOeaccw5CCKFUijHGnHMOQgghlIwx5pxzEEIIIYRSSsaccxBCCCGEkFLqnHMQQgghhBBKKZ1zDkIIIYQQQimlgxBCCCGEEEoopaQUQgghhBBCCKmklEIIIYRSQighlZRSCCGEEEIpJaSUUgohhFJCCKGElFJKKYUQQgillJJSSimlEkoJJYQSUikppRRKCCGUUkpKKaVUSgmhhBJKKSWllFJKIYQQSikFAAAcOAAABBhBJxlVFmGjCRcegEJDVgIAZAAAkKKUUiktRYIipRikGEtGFXNQWoqocgxSzalSziDmJJaIMYSUk1Qy5hRCDELqHHVMKQYtlRhCxhik2HJLoXMOAAAAQQCAgJAAAAMEBTMAwOAA4XMQdAIERxsAgCBEZohEw0JweFAJEBFTAUBigkIuAFRYXKRdXECXAS7o4q4DIQQhCEEsDqCABByccMMTb3jCDU7QKSp1IAAAAAAADADwAACQXAAREdHMYWRobHB0eHyAhIiMkAgAAAAAABcAfAAAJCVAREQ0cxgZGhscHR4fICEiIyQBAIAAAgAAAAAggAAEBAQAAAAAAAIAAAAEBB9DtnUBAAAAAAAEPueBAKOFggAAgACjzoEAA4BwBwCdASqwAJAAAEcIhYWIhYSIAgIABhwJ7kPfbJyHvtk5D32ych77ZOQ99snIe+2TkPfbJyHvtk5D32ych77ZOQ99YAD+/6tQgKOFggADgAqjhYIAD4AOo4WCACSADqOZgQArADECAAEQEAAYABhYL/QACIBDmAYAAKOFggA6gA6jhYIAT4AOo5mBAFMAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCAGSADqOFggB6gA6jmYEAewAxAgABEBAAGAAYWC/0AAiAQ5gGAACjhYIAj4AOo5mBAKMAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCAKSADqOFggC6gA6jmYEAywAxAgABEBAAGAAYWC/0AAiAQ5gGAACjhYIAz4AOo4WCAOSADqOZgQDzADECAAEQEAAYABhYL/QACIBDmAYAAKOFggD6gA6jhYIBD4AOo5iBARsAEQIAARAQFGAAYWC/0AAiAQ5gGACjhYIBJIAOo4WCATqADqOZgQFDADECAAEQEAAYABhYL/QACIBDmAYAAKOFggFPgA6jhYIBZIAOo5mBAWsAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCAXqADqOFggGPgA6jmYEBkwAxAgABEBAAGAAYWC/0AAiAQ5gGAACjhYIBpIAOo4WCAbqADqOZgQG7ADECAAEQEAAYABhYL/QACIBDmAYAAKOFggHPgA6jmYEB4wAxAgABEBAAGAAYWC/0AAiAQ5gGAACjhYIB5IAOo4WCAfqADqOZgQILADECAAEQEAAYABhYL/QACIBDmAYAAKOFggIPgA6jhYICJIAOo5mBAjMAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCAjqADqOFggJPgA6jmYECWwAxAgABEBAAGAAYWC/0AAiAQ5gGAACjhYICZIAOo4WCAnqADqOZgQKDADECAAEQEAAYABhYL/QACIBDmAYAAKOFggKPgA6jhYICpIAOo5mBAqsAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCArqADqOFggLPgA6jmIEC0wARAgABEBAUYABhYL/QACIBDmAYAKOFggLkgA6jhYIC+oAOo5mBAvsAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCAw+ADqOZgQMjADECAAEQEAAYABhYL/QACIBDmAYAAKOFggMkgA6jhYIDOoAOo5mBA0sAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCA0+ADqOFggNkgA6jmYEDcwAxAgABEBAAGAAYWC/0AAiAQ5gGAACjhYIDeoAOo4WCA4+ADqOZgQObADECAAEQEAAYABhYL/QACIBDmAYAAKOFggOkgA6jhYIDuoAOo5mBA8MAMQIAARAQABgAGFgv9AAIgEOYBgAAo4WCA8+ADqOFggPkgA6jhYID+oAOo4WCBA+ADhxTu2sBAAAAAAAAEbuPs4EDt4r3gQHxghEr8IEK";
+  const NOSLEEP_MP4 = "data:video/mp4;base64,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";
+  let wakeLock = null, sleepVideo = null, awake = false, acquiring = false;
+
+  function updateAwakeUI() {
+    const btn = $('awakeBtn');
+    btn.classList.toggle('on', settings.keepAwake && awake);
+    btn.classList.toggle('off', !settings.keepAwake);
+    btn.setAttribute('aria-pressed', String(settings.keepAwake));
+  }
+  function makeSleepVideo() {
+    const v = document.createElement('video');
+    v.setAttribute('playsinline', ''); v.setAttribute('muted', ''); v.muted = true;
+    v.setAttribute('title', 'Keep screen awake');
+    v.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:0;top:0;';
+    [['webm', NOSLEEP_WEBM], ['mp4', NOSLEEP_MP4]].forEach(([type, src]) => {
+      const el = document.createElement('source'); el.src = src; el.type = 'video/' + type; v.appendChild(el);
+    });
+    v.addEventListener('loadedmetadata', () => {
+      if (v.duration <= 1) v.setAttribute('loop', '');
+      else v.addEventListener('timeupdate', () => { if (v.currentTime > 0.5) v.currentTime = Math.random(); });
+    });
+    document.body.appendChild(v);
+    return v;
+  }
+  async function acquireAwake() {
+    if (!settings.keepAwake || document.visibilityState !== 'visible' || acquiring) return;
+    if (wakeLock || (sleepVideo && !sleepVideo.paused)) { awake = true; updateAwakeUI(); return; }
+    acquiring = true;
+    try {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; awake = false; updateAwakeUI(); });
+          awake = true;
+          return;
+        } catch (e) { wakeLock = null; }
+      }
+      try {
+        if (!sleepVideo) sleepVideo = makeSleepVideo();
+        await sleepVideo.play();
+        awake = true;
+      } catch (e) { awake = false; }
+    } finally {
+      acquiring = false;
+      updateAwakeUI();
+    }
+  }
+  function releaseAwake() {
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+    if (sleepVideo) sleepVideo.pause();
+    awake = false;
+    updateAwakeUI();
+  }
+  const requestWakeLock = acquireAwake; // used by start()
+
+  // Phones only allow this after a tap, so (re)try on any touch while it isn't active.
+  document.addEventListener('pointerdown', () => { if (settings.keepAwake && !awake) acquireAwake(); }, true);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      acquireAwake();
+      tick(); // catch up if the level ended while hidden
+    }
+  });
+
+  let toastTimer = null;
+  function toast(msg) {
+    $('toast').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2200);
+  }
+  $('awakeBtn').onclick = async () => {
+    settings.keepAwake = !settings.keepAwake;
+    save();
+    if (settings.keepAwake) {
+      await acquireAwake();
+      toast(awake ? 'Screen will stay on' : 'Couldn’t keep screen on here');
+    } else {
+      releaseAwake();
+      toast('Screen can sleep normally');
+    }
+  };
+  updateAwakeUI();
+  acquireAwake();
+
+  // ---------- Settings panel ----------
+  function updatePreview() {
+    const small = Math.max(1, parseInt($('small').value) || 1);
+    const clean = $('clean').checked;
+    $('big').value = small * 2;
+    const items = [];
+    for (let i = 0; i < 8; i++) {
+      const [s, b] = blindsFor(i, small, clean);
+      items.push(`${fmt(s)}/${fmt(b)}`);
+    }
+    $('preview').textContent = items.join(' → ') + ' …';
+  }
+  $('settingsBtn').onclick = () => {
+    $('minutes').value = settings.minutes;
+    $('small').value = settings.small;
+    $('clean').checked = settings.clean;
+    $('alarmSound').value = settings.alarmSound;
+    updatePreview();
+    $('settingsOverlay').classList.add('show');
+  };
+  $('previewSound').onclick = () => { unlockAudio(); playSound($('alarmSound').value); };
+  $('small').oninput = updatePreview;
+  $('clean').onchange = updatePreview;
+  $('cancelSettings').onclick = () => $('settingsOverlay').classList.remove('show');
+  $('saveSettings').onclick = () => {
+    const before = [settings.minutes, settings.small, settings.clean].join();
+    settings.minutes = Math.min(180, Math.max(1, parseInt($('minutes').value) || 15));
+    settings.small = Math.max(1, parseInt($('small').value) || 1);
+    settings.clean = $('clean').checked;
+    settings.alarmSound = $('alarmSound').value;
+    save();
+    if ([settings.minutes, settings.small, settings.clean].join() !== before) {
+      level = 0;
+      resetLevelClock();
+    }
+    $('settingsOverlay').classList.remove('show');
+    render();
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
